@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "woff-stripe-demo",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-21",
+  "observability": { "enabled": true },
+  "assets": {
+    "directory": "public",
+    // /api/* は Worker で処理し、それ以外は静的ファイルを返す
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    // 自分の WOFF ID に置き換える。購入完了後の戻り先 (WOFF URL) を組み立てるのに使う。
+    // 戻り先をクライアントから受け取らないのは、任意の URL に飛ばされないようにするため
+    "WOFF_ID": "<YOUR_WOFF_ID>"
+  },
+  "kv_namespaces": [
+    // wrangler kv namespace create PURCHASES で作った id に置き換える
+    { "binding": "PURCHASES", "id": "<YOUR_KV_NAMESPACE_ID>" }
+  ]
+  // シークレット (コードに書かない):
+  //   wrangler secret put STRIPE_SECRET_KEY        (sk_test_...)
+  //   wrangler secret put STRIPE_PUBLISHABLE_KEY   (pk_test_...)
+  //   wrangler secret put STRIPE_WEBHOOK_SECRET    (whsec_...)
+}

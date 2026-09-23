@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WOFF コンテンツストア</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <header>
+        <h1>コンテンツストア</h1>
+        <p id="greeting" class="lead">読み込み中...</p>
+        <p class="badge">Stripe テストモード: カード番号 4242 4242 4242 4242 で購入できます</p>
+        <p class="mode"><span id="mode"></span> <button id="modeToggle" class="link">決済方式を切り替える</button></p>
+    </header>
+
+    <main>
+        <p id="notice" class="notice" hidden></p>
+        <ul id="products" class="products"></ul>
+
+        <!-- 決済フォーム。Stripe.js がこの中に iframe を差し込む -->
+        <section id="checkoutSection" hidden>
+            <div id="checkout"></div>
+            <button id="checkoutCancel" class="secondary">購入をやめる</button>
+        </section>
+
+        <section id="viewer" class="viewer" hidden>
+            <h2 id="viewerTitle"></h2>
+            <p id="viewerBody"></p>
+            <button id="viewerClose" class="secondary">閉じる</button>
+        </section>
+    </main>
+
+    <script charset="utf-8" src="https://static.worksmobile.net/static/wm/woff/edge/3.7.1/sdk.js"></script>
+    <!-- Stripe.js は PCI 準拠のため js.stripe.com から読み込む (自分でホストしない) -->
+    <script src="https://js.stripe.com/dahlia/stripe.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
