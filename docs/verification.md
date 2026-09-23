@@ -37,7 +37,6 @@ PC アプリは WOFF を外部ブラウザで開くため、外部ブラウザ�
 ## 利用者の特定
 
 `woff.getAccessToken()` のアクセストークンで `GET https://www.worksapis.com/v1.0/users/me` を呼び、利用者を特定できた。
-WOFF のドキュメントには、アクセストークンをサーバー側で検証する方法の記載が見当たらなかったため、この方法を使っている。
 Developer Console アプリの OAuth Scopes に user 系のスコープが必要。
 
 ## その他に観察したこと
