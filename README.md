@@ -19,7 +19,13 @@ Stripe Checkout には、Stripe のページに移動する **Hosted Checkout** 
 Checkout の URL は `#` 以降が必須で、移動の途中でこれが落ちていると考えられます。
 
 このデモは **Embedded Checkout (`ui_mode=embedded_page`)** を使っています。
-比較のため、画面の「決済方式を切り替える」で Hosted Checkout も試せます。
+比較のため、画面の「決済方式を切り替える」で次の方式も試せます (押すたびに順に切り替わります)。
+
+| 表示 | 方式 |
+|---|---|
+| Embedded | ページ内に決済フォームを埋め込む (既定) |
+| Hosted | Checkout の URL に `location.href` で移動する |
+| Hosted 303 | 自分のサーバー (`/api/redirect/:sessionId`) の 303 リダイレクトを経由して移動する |
 
 確認した環境と結果は [docs/verification.md](docs/verification.md) にまとめています。
 
@@ -58,8 +64,12 @@ GET /api/content/:id ──token──▶    KV に記録があれば本文を�
 | `POST /api/confirm` | 戻ってきたときに Session を確認して購入を記録 |
 | `GET /api/content/:id` | 購入済みなら本文を返す |
 | `POST /api/webhook` | Stripe からの通知 (署名を検証) |
+| `GET /api/redirect/:sessionId` | 比較用。Stripe から Session を取り直し、このデモの未完了の Session なら Checkout の URL に 303 で転送 |
 
-`/api/webhook` 以外は、`Authorization: Bearer <WOFF のアクセストークン>` が必要です。
+`/api/webhook` と `/api/redirect` 以外は、`Authorization: Bearer <WOFF のアクセストークン>` が必要です。
+
+Checkout Session の metadata に `platform: woff` を入れ、記録するのはこの値を持つ Session だけにしています。
+Stripe の webhook は、同じアカウントで起きた他のアプリの購入も通知するためです。
 
 ## 必要なもの
 

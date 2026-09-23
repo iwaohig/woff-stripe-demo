@@ -5,12 +5,18 @@
 //   POST /api/confirm           戻ってきたときに Session を Stripe に問い合わせて購入を確定する
 //   GET  /api/content/:id       購入済みなら本文を返す
 //   POST /api/webhook           Stripe からの通知 (checkout.session.completed)
+//   GET  /api/redirect/:id      比較用: Hosted Checkout の URL に 303 で転送する
 //
 // 利用者の特定は、WOFF のアクセストークンで LINE WORKS API の users/me を呼んで行う。
 // クライアントから送られた userId は信用しない。
 
 const WORKS_API = 'https://www.worksapis.com/v1.0';
 const STRIPE_API = 'https://api.stripe.com/v1';
+
+// Checkout Session の metadata に入れる識別子。Stripe の webhook の送信先はアカウント単位で、
+// 同じアカウントを使う別のアプリ (LIFF 版など) の購入通知も届くため、自分の Session だけを記録する
+const PLATFORM = 'woff';
+const CHECKOUT_MODES = ['embedded', 'hosted', 'hosted303'];
 
 // デモ用の商品。本文 (body) はこの Worker からしか返さない
 const PRODUCTS = [
@@ -38,6 +44,18 @@ export default {
         return await handleWebhook(request, env);
       }
 
+      // 比較用: 自サーバーの 303 を経由して Hosted Checkout に移動する。
+      // 画面遷移なので Authorization ヘッダーは付かない。Stripe から Session を取り直し、
+      // このデモが作った未完了の Session の url にだけ転送する (任意の URL には飛ばさない)
+      const redirect = url.pathname.match(/^\/api\/redirect\/(cs_(?:test|live)_\w+)$/);
+      if (redirect && request.method === 'GET') {
+        const session = await stripe(env, 'GET', `/checkout/sessions/${redirect[1]}`);
+        if (session.metadata?.platform !== PLATFORM || session.status !== 'open' || !session.url) {
+          throw new HttpError(410, 'この決済ページは使えません');
+        }
+        return new Response(null, { status: 303, headers: { Location: session.url, 'Cache-Control': 'no-store' } });
+      }
+
       // webhook 以外は WOFF のアクセストークンが必須
       const user = await authenticate(request);
 
@@ -57,7 +75,7 @@ export default {
 
       if (url.pathname === '/api/checkout' && request.method === 'POST') {
         const { productId, mode } = await request.json();
-        return await createCheckout(env, user, findProduct(productId), mode === 'hosted' ? 'hosted' : 'embedded');
+        return await createCheckout(env, user, findProduct(productId), CHECKOUT_MODES.includes(mode) ? mode : 'embedded');
       }
 
       if (url.pathname === '/api/confirm' && request.method === 'POST') {
@@ -118,7 +136,9 @@ async function isPurchased(env, userId, productId) {
 // source ('confirm' | 'webhook') ごとに別キーで記録ログを残す。
 // 同じキーを読んで書き足す方式だと、両方がほぼ同時に来たとき片方の記録が消えるため
 async function recordPurchase(env, session, source) {
-  const { userId, productId } = session.metadata || {};
+  const { platform, userId, productId } = session.metadata || {};
+  // 同じ Stripe アカウントを使う別のアプリの Session は記録しない (webhook には 200 を返す)
+  if (platform !== PLATFORM) return false;
   if (!userId || !productId || session.payment_status !== 'paid') return false;
   const at = new Date().toISOString();
   await Promise.all([
@@ -168,19 +188,21 @@ async function createCheckout(env, user, product, checkoutMode) {
     'line_items[0][price_data][unit_amount]': String(product.price),
     'line_items[0][price_data][product_data][name]': product.name,
     client_reference_id: user.userId,
+    'metadata[platform]': PLATFORM,
     'metadata[userId]': user.userId,
     'metadata[productId]': product.id,
   };
 
-  if (checkoutMode === 'hosted') {
+  if (checkoutMode === 'hosted' || checkoutMode === 'hosted303') {
     // 比較用: Stripe のホストするページに移動する方式。URL の # 以降が必須だが、
-    // WOFF の Android アプリで移動すると # 以降が落ちて "This link is incomplete" になった (303 経由でも同じ)
+    // WOFF のアプリ内ブラウザで移動すると # 以降が落ちて "This link is incomplete" になった。
+    // hosted は Checkout の URL に直接、hosted303 は /api/redirect/... の 303 を経由して移動する
     const session = await stripe(env, 'POST', '/checkout/sessions', {
       ...common,
-      success_url: `${woffUrl}?checkout=hosted&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${woffUrl}?checkout=hosted`,
+      success_url: `${woffUrl}?checkout=${checkoutMode}&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${woffUrl}?checkout=${checkoutMode}`,
     });
-    return json({ url: session.url });
+    return json({ url: checkoutMode === 'hosted303' ? `/api/redirect/${session.id}` : session.url });
   }
 
   // 既定: Checkout をページ内に埋め込む (ui_mode=embedded_page)。ページを移動しないので # の問題が起きない

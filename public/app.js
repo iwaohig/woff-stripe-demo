@@ -44,13 +44,19 @@ function cleanUrl() {
 }
 
 // 決済方式の切り替え (比較検証用)。既定は埋め込み (embedded)。
-// 画面の「決済方式を切り替える」ボタンか、WOFF URL の後ろの ?checkout=hosted で hosted になる。
+// 画面の「決済方式を切り替える」ボタンで embedded → hosted → hosted303 の順に切り替わる。
+// WOFF URL の後ろに ?checkout=hosted / ?checkout=hosted303 を付けて開いても指定できる。
 // iOS アプリではトークに貼ったクエリ付き WOFF URL が「一時的に利用できません」で開けなかったため、ボタンも用意している
-let checkoutMode = readParam('checkout') === 'hosted' ? 'hosted' : 'embedded';
+const MODE_LABELS = {
+    embedded: '決済方式: Embedded (ページ内に埋め込み)',
+    hosted: '決済方式: Hosted (checkout.stripe.com に移動)',
+    hosted303: '決済方式: Hosted 303 (自サーバーの 303 を経由して移動)',
+};
+const MODES = Object.keys(MODE_LABELS);
+let checkoutMode = MODES.includes(readParam('checkout')) ? readParam('checkout') : 'embedded';
 
 function showMode() {
-    document.getElementById('mode').textContent =
-        checkoutMode === 'hosted' ? '決済方式: Hosted (checkout.stripe.com に移動)' : '決済方式: Embedded (ページ内に埋め込み)';
+    document.getElementById('mode').textContent = MODE_LABELS[checkoutMode];
 }
 
 let publishableKey = null;
@@ -93,7 +99,7 @@ async function buy(productId, button) {
     button.disabled = true;
     button.textContent = '決済フォームを準備中...';
     notice('');
-    if (checkoutMode === 'hosted') return buyHosted(productId, button);
+    if (checkoutMode !== 'embedded') return buyHosted(productId, button, checkoutMode);
     try {
         if (!publishableKey) throw new Error('公開可能キーが設定されていません');
         const stripe = Stripe(publishableKey);
@@ -117,12 +123,13 @@ async function buy(productId, button) {
 }
 
 // 比較用: Stripe のホストするページに同じ画面のまま移動する。
-// WOFF の Android アプリではこの方式で URL の # 以降が落ち、"This link is incomplete" になった
-async function buyHosted(productId, button) {
+// hosted は Checkout の URL に直接、hosted303 は自サーバーの /api/redirect/... を経由する。
+// WOFF のアプリ内ブラウザではどちらも URL の # 以降が落ち、"This link is incomplete" になった
+async function buyHosted(productId, button, mode) {
     try {
         const { url } = await api('/api/checkout', {
             method: 'POST',
-            body: JSON.stringify({ productId, mode: 'hosted' }),
+            body: JSON.stringify({ productId, mode }),
         });
         location.href = url;
     } catch (e) {
@@ -166,7 +173,7 @@ async function handleReturn() {
 async function main() {
     document.getElementById('checkoutCancel').onclick = closeCheckout;
     document.getElementById('modeToggle').onclick = () => {
-        checkoutMode = checkoutMode === 'hosted' ? 'embedded' : 'hosted';
+        checkoutMode = MODES[(MODES.indexOf(checkoutMode) + 1) % MODES.length];
         showMode();
     };
     showMode();
